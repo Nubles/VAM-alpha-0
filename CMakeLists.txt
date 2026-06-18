@@ -138,3 +138,18 @@ add_custom_command(TARGET RealmboundWilds POST_BUILD
     ${CMAKE_CURRENT_SOURCE_DIR}/Assets
     $<TARGET_FILE_DIR:RealmboundWilds>/Assets
 )
+
+# Enable testing framework
+enable_testing()
+
+# Define EngineCoreTests target
+add_executable(EngineCoreTests Tests/EngineCoreTests.cpp)
+target_include_directories(EngineCoreTests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_BINARY_DIR}/_deps/glm-src
+)
+target_link_libraries(EngineCoreTests PRIVATE glm)
+
+# Add CTest check
+add_test(NAME EngineCoreTests COMMAND EngineCoreTests)
+

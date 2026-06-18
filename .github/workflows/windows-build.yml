@@ -1,0 +1,26 @@
+name: Windows Build Verification
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Configure CMake
+      run: cmake -B build -S . "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+
+    - name: Build Project
+      run: cmake --build build --config Debug
+
+    - name: Run Tests
+      working-directory: build
+      run: ctest -C Debug --output-on-failure
