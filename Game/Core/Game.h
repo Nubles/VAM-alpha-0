@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 #include "SceneObject.h"
+#include "Player.h"
 
 // Forward declarations
 namespace Engine {
@@ -55,6 +56,11 @@ private:
 
     // Sandbox scene objects
     std::vector<SceneObject> m_sceneObjects;
+
+    // Player and Interaction State
+    Player m_player;
+    int m_targetObjectIndex;
+    std::string m_lastInteractionLog;
 };
 
 } // namespace Game

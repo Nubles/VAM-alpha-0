@@ -111,6 +111,8 @@ set(SOURCE_FILES
     Game/Core/Game.h
     Game/Core/Game.cpp
     Game/Core/SceneObject.h
+    Game/Core/Player.h
+    Game/Core/Player.cpp
     Game/Core/Main.cpp
 )
 
@@ -143,7 +145,7 @@ add_custom_command(TARGET RealmboundWilds POST_BUILD
 enable_testing()
 
 # Define EngineCoreTests target
-add_executable(EngineCoreTests Tests/EngineCoreTests.cpp)
+add_executable(EngineCoreTests Tests/EngineCoreTests.cpp Game/Core/Player.h Game/Core/Player.cpp)
 target_include_directories(EngineCoreTests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_BINARY_DIR}/_deps/glm-src

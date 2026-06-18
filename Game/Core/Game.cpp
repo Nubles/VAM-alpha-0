@@ -19,7 +19,8 @@ Game::Game()
       m_cubeVAO(0), m_cubeVBO(0),
       m_cubeRotationSpeed(45.0f), m_cubeRotationAngle(0.0f),
       m_showImGuiDemo(false), m_wireframeMode(false),
-      m_gridVAO(0), m_gridVBO(0), m_gridVertexCount(0) {
+      m_gridVAO(0), m_gridVBO(0), m_gridVertexCount(0),
+      m_targetObjectIndex(-1), m_lastInteractionLog("No interactions yet.") {
     m_cubeColor[0] = 0.2f;
     m_cubeColor[1] = 0.6f;
     m_cubeColor[2] = 0.9f;
@@ -85,6 +86,19 @@ bool Game::Init(Engine::Window* window) {
     marker.transform.rotation = Engine::Vec3(0.0f, 30.0f, 0.0f);
     marker.transform.scale = Engine::Vec3(0.5f, 1.0f, 0.5f);
     m_sceneObjects.push_back(marker);
+
+    // Milestone 2 Interactable Object
+    SceneObject ancientStone;
+    ancientStone.name = "Ancient Stone";
+    ancientStone.type = PrimitiveType::Cube;
+    ancientStone.color = Engine::Vec3(0.3f, 0.3f, 0.4f);
+    ancientStone.transform.position = Engine::Vec3(2.0f, 0.6f, 2.0f);
+    ancientStone.transform.rotation = Engine::Vec3(0.0f, 45.0f, 0.0f);
+    ancientStone.transform.scale = Engine::Vec3(0.8f, 1.2f, 0.8f);
+    ancientStone.isInteractable = true;
+    ancientStone.interactionRadius = 1.5f;
+    ancientStone.interactionMessage = "You touched the cold, weathered surface of the Ancient Stone. The air hums with faint magic.";
+    m_sceneObjects.push_back(ancientStone);
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
@@ -181,9 +195,24 @@ void Game::Update(float dt) {
         Stop();
     }
 
-    // Camera speed boost check (Left Shift / Right Shift)
-    bool speedUp = Engine::Input::IsKeyPressed(GLFW_KEY_LEFT_SHIFT) || Engine::Input::IsKeyPressed(GLFW_KEY_RIGHT_SHIFT);
-    float cameraDt = speedUp ? dt * 3.0f : dt;
+    // Determine movement inputs
+    bool isMoving = Engine::Input::IsKeyPressed(GLFW_KEY_W) ||
+                    Engine::Input::IsKeyPressed(GLFW_KEY_S) ||
+                    Engine::Input::IsKeyPressed(GLFW_KEY_A) ||
+                    Engine::Input::IsKeyPressed(GLFW_KEY_D);
+    bool isSprinting = Engine::Input::IsKeyPressed(GLFW_KEY_LEFT_SHIFT) ||
+                       Engine::Input::IsKeyPressed(GLFW_KEY_RIGHT_SHIFT);
+
+    // Update Player vitals (health, stamina)
+    m_player.Update(dt, isMoving, isSprinting);
+
+    // Set player position to camera position
+    glm::vec3 camPos = m_camera->GetPosition();
+    m_player.SetPosition(Engine::Vec3(camPos.x, camPos.y, camPos.z));
+
+    // Get current speed based on player state
+    float speedMultiplier = m_player.GetSpeed(m_player.IsSprinting());
+    float cameraDt = dt * (speedMultiplier / 5.0f); // Normalize base speed to match camera base movement
 
     // Camera keyboard movement controls
     if (Engine::Input::IsKeyPressed(GLFW_KEY_W)) {
@@ -215,6 +244,47 @@ void Game::Update(float dt) {
         float dy = Engine::Input::GetMouseDY();
         m_camera->ProcessMouseMovement(dx, dy);
     }
+
+    // Raycast Interaction test
+    // Ray starts at camera position in look-at direction
+    glm::vec3 rayOrigin = m_camera->GetPosition();
+    glm::vec3 rayDir = m_camera->GetFront();
+
+    m_targetObjectIndex = -1;
+    float closestDist = 4.0f; // Max interaction/reach distance
+
+    for (int i = 0; i < static_cast<int>(m_sceneObjects.size()); ++i) {
+        auto& obj = m_sceneObjects[i];
+        if (!obj.isInteractable) continue;
+
+        // Perform simple ray-sphere intersection test as interaction test
+        // Object center:
+        glm::vec3 center(obj.transform.position.x, obj.transform.position.y, obj.transform.position.z);
+        glm::vec3 oc = rayOrigin - center;
+        float b = glm::dot(oc, rayDir);
+        float c = glm::dot(oc, oc) - (obj.interactionRadius * obj.interactionRadius);
+        float discriminant = b * b - c;
+
+        if (discriminant >= 0) {
+            float t = -b - sqrt(discriminant);
+            if (t > 0 && t < closestDist) {
+                closestDist = t;
+                m_targetObjectIndex = i;
+            }
+        }
+    }
+
+    // Handle interaction trigger (E key)
+    static bool eKeyWasPressed = false;
+    bool eKeyPressed = Engine::Input::IsKeyPressed(GLFW_KEY_E);
+    if (eKeyPressed && !eKeyWasPressed) {
+        if (m_targetObjectIndex != -1) {
+            auto& targetObj = m_sceneObjects[m_targetObjectIndex];
+            m_lastInteractionLog = "Interacted with " + targetObj.name + ": " + targetObj.interactionMessage;
+            std::cout << "[Interaction] " << m_lastInteractionLog << std::endl;
+        }
+    }
+    eKeyWasPressed = eKeyPressed;
 
     // Update cube rotation angle for general use
     m_cubeRotationAngle += m_cubeRotationSpeed * dt;
@@ -296,6 +366,31 @@ void Game::Render() {
 }
 
 void Game::RenderDebugUI(float dt) {
+    // Render Player Vitals HUD (Floating Overlay or top of console)
+    ImGui::Begin("Player Vitals & Interaction HUD");
+    ImGui::Text("Health:");
+    ImGui::SameLine();
+    ImGui::ProgressBar(m_player.GetHealth() / 100.0f, ImVec2(200.0f, 0.0f));
+
+    ImGui::Text("Stamina:");
+    ImGui::SameLine();
+    ImGui::ProgressBar(m_player.GetStamina() / 100.0f, ImVec2(200.0f, 0.0f));
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    
+    // Targeted interactable
+    if (m_targetObjectIndex != -1) {
+        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Target: %s", m_sceneObjects[m_targetObjectIndex].name.c_str());
+        ImGui::TextColored(ImVec4(0.0f, 0.8f, 1.0f, 1.0f), "Press [E] to Interact");
+    } else {
+        ImGui::Text("Target: None");
+    }
+
+    ImGui::Spacing();
+    ImGui::TextWrapped("Last Log: %s", m_lastInteractionLog.c_str());
+    ImGui::End();
+
     ImGui::Begin("Realmbound Wilds Debug Console");
     
     ImGui::Text("Engine Performance");
@@ -376,7 +471,7 @@ void Game::RenderDebugUI(float dt) {
     ImGui::Spacing();
     ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Left-click: Capture Mouse");
     ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Left-Alt: Release Mouse");
-    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "W,A,S,D: Move | Left-Shift: Speed up | ESC: Quit");
+    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "W,A,S,D: Move | Left-Shift: Sprint | E: Interact | ESC: Quit");
 
     ImGui::End();
 }
