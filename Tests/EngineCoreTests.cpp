@@ -3,6 +3,8 @@
 #include "../Game/Core/ItemDatabase.h"
 #include "../Game/Core/Inventory.h"
 #include "../Game/Core/Hotbar.h"
+#include "../Game/Core/DropTable.h"
+#include "../Game/Core/GatherableNode.h"
 #include <iostream>
 #include <cassert>
 
@@ -128,12 +130,83 @@ void TestInventoryAndHotbar() {
     std::cout << "TestInventoryAndHotbar passed!" << std::endl;
 }
 
+void TestResourceGathering() {
+    Game::ItemDatabase::Get().Initialize();
+
+    // 1. DropTable distribution test
+    Game::DropTable woodTable;
+    woodTable.entries.push_back({"wood", 5, 10});
+    auto drops = woodTable.Roll();
+    assert(drops.size() == 1);
+    assert(drops[0].first == "wood");
+    assert(drops[0].second == 5);
+
+    // 2. Gatherable Node setup
+    Game::GatherableNode branchNode("Branch Pile", woodTable, 2);
+    assert(branchNode.GetName() == "Branch Pile");
+    assert(!branchNode.IsDepleted());
+    assert(branchNode.GetRemainingHits() == 2);
+
+    Game::Inventory inv(5);
+    std::string msg;
+
+    // 3. Gather without tools requirements
+    bool success = branchNode.Gather(inv, msg);
+    assert(success);
+    assert(inv.Contains("wood", 5));
+    assert(branchNode.GetRemainingHits() == 1);
+
+    // 4. Node depletion check
+    success = branchNode.Gather(inv, msg);
+    assert(success);
+    assert(branchNode.IsDepleted());
+    assert(branchNode.GetRemainingHits() == 0);
+
+    // Gather when depleted should fail
+    success = branchNode.Gather(inv, msg);
+    assert(!success);
+
+    // 5. Gather with tool requirements
+    Game::DropTable stoneTable;
+    stoneTable.entries.push_back({"stone", 3, 5});
+    Game::GatherableNode rockNode("Cracked Rock", stoneTable, 2, "primitive_tool");
+    assert(rockNode.GetRequiredToolId() == "primitive_tool");
+
+    Game::Inventory toolInv(5);
+    // Attempt gather without tool in inventory (should fail)
+    success = rockNode.Gather(toolInv, msg);
+    assert(!success);
+    assert(!toolInv.Contains("stone", 1));
+
+    // Grant primitive tool and attempt gather (should succeed)
+    toolInv.AddItem("primitive_tool", 1);
+    success = rockNode.Gather(toolInv, msg);
+    assert(success);
+    assert(toolInv.Contains("stone", 3));
+
+    // 6. Overflow handling
+    Game::Inventory fullInv(1);
+    // Fill inventory completely
+    fullInv.AddItem("fiber", 100); // Max stack size is 100
+
+    Game::DropTable fiberTable;
+    fiberTable.entries.push_back({"fiber", 10, 20});
+    Game::GatherableNode plantNode("Fiber Plant", fiberTable, 2);
+
+    // Attempt gather should fail because inventory has no space
+    success = plantNode.Gather(fullInv, msg);
+    assert(!success);
+
+    std::cout << "TestResourceGathering passed!" << std::endl;
+}
+
 int main() {
     std::cout << "Running EngineCoreTests..." << std::endl;
     TestTransformIdentity();
     TestTransformTranslation();
     TestPlayerStamina();
     TestInventoryAndHotbar();
+    TestResourceGathering();
     std::cout << "All tests passed!" << std::endl;
     return 0;
 }

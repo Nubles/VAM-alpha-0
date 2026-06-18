@@ -103,6 +103,72 @@ bool Game::Init(Engine::Window* window) {
     ancientStone.interactionMessage = "You touched the cold, weathered surface of the Ancient Stone. The air hums with faint magic.";
     m_sceneObjects.push_back(ancientStone);
 
+    // Drop tables config
+    DropTable woodTable;
+    woodTable.entries.push_back({"wood", 3, 5});
+
+    DropTable stoneTable;
+    stoneTable.entries.push_back({"stone", 2, 4});
+
+    DropTable fiberTable;
+    fiberTable.entries.push_back({"fiber", 4, 8});
+
+    // 1. Branch Pile (gives wood, no tool required)
+    SceneObject branchPile;
+    branchPile.name = "Branch Pile";
+    branchPile.type = PrimitiveType::Cube;
+    branchPile.color = Engine::Vec3(0.5f, 0.35f, 0.2f); // Brown
+    branchPile.transform.position = Engine::Vec3(-2.0f, 0.2f, -3.0f);
+    branchPile.transform.rotation = Engine::Vec3(0.0f, 15.0f, 0.0f);
+    branchPile.transform.scale = Engine::Vec3(0.6f, 0.3f, 0.6f);
+    branchPile.isInteractable = true;
+    branchPile.isGatherable = true;
+    branchPile.interactionRadius = 1.2f;
+    branchPile.gatherable = GatherableNode("Branch Pile", woodTable, 3);
+    m_sceneObjects.push_back(branchPile);
+
+    // 2. Loose Stone (gives stone, no tool required)
+    SceneObject looseStone;
+    looseStone.name = "Loose Stone";
+    looseStone.type = PrimitiveType::Cube;
+    looseStone.color = Engine::Vec3(0.6f, 0.6f, 0.6f); // Grey
+    looseStone.transform.position = Engine::Vec3(3.0f, 0.15f, 4.0f);
+    looseStone.transform.rotation = Engine::Vec3(10.0f, 20.0f, 5.0f);
+    looseStone.transform.scale = Engine::Vec3(0.4f, 0.3f, 0.4f);
+    looseStone.isInteractable = true;
+    looseStone.isGatherable = true;
+    looseStone.interactionRadius = 1.0f;
+    looseStone.gatherable = GatherableNode("Loose Stone", stoneTable, 2);
+    m_sceneObjects.push_back(looseStone);
+
+    // 3. Fiber Plant (gives fiber, no tool required)
+    SceneObject fiberPlant;
+    fiberPlant.name = "Fiber Plant";
+    fiberPlant.type = PrimitiveType::Cube;
+    fiberPlant.color = Engine::Vec3(0.2f, 0.7f, 0.3f); // Green
+    fiberPlant.transform.position = Engine::Vec3(-4.0f, 0.4f, -1.0f);
+    fiberPlant.transform.rotation = Engine::Vec3(0.0f, 0.0f, 0.0f);
+    fiberPlant.transform.scale = Engine::Vec3(0.3f, 0.8f, 0.3f);
+    fiberPlant.isInteractable = true;
+    fiberPlant.isGatherable = true;
+    fiberPlant.interactionRadius = 1.0f;
+    fiberPlant.gatherable = GatherableNode("Fiber Plant", fiberTable, 3);
+    m_sceneObjects.push_back(fiberPlant);
+
+    // 4. Cracked Rock (gives stone, requires primitive_tool)
+    SceneObject crackedRock;
+    crackedRock.name = "Cracked Rock";
+    crackedRock.type = PrimitiveType::Cube;
+    crackedRock.color = Engine::Vec3(0.4f, 0.4f, 0.45f); // Dark Grey
+    crackedRock.transform.position = Engine::Vec3(4.0f, 0.7f, -4.0f);
+    crackedRock.transform.rotation = Engine::Vec3(0.0f, 45.0f, 0.0f);
+    crackedRock.transform.scale = Engine::Vec3(1.0f, 1.4f, 1.0f);
+    crackedRock.isInteractable = true;
+    crackedRock.isGatherable = true;
+    crackedRock.interactionRadius = 1.8f;
+    crackedRock.gatherable = GatherableNode("Cracked Rock", stoneTable, 4, "primitive_tool");
+    m_sceneObjects.push_back(crackedRock);
+
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -283,8 +349,15 @@ void Game::Update(float dt) {
     if (eKeyPressed && !eKeyWasPressed) {
         if (m_targetObjectIndex != -1) {
             auto& targetObj = m_sceneObjects[m_targetObjectIndex];
-            m_lastInteractionLog = "Interacted with " + targetObj.name + ": " + targetObj.interactionMessage;
-            std::cout << "[Interaction] " << m_lastInteractionLog << std::endl;
+            if (targetObj.isGatherable) {
+                std::string gatherResult;
+                targetObj.gatherable.Gather(m_inventory, gatherResult);
+                m_lastInteractionLog = gatherResult;
+                std::cout << "[Gathering] " << gatherResult << std::endl;
+            } else {
+                m_lastInteractionLog = "Interacted with " + targetObj.name + ": " + targetObj.interactionMessage;
+                std::cout << "[Interaction] " << m_lastInteractionLog << std::endl;
+            }
         }
     }
     eKeyWasPressed = eKeyPressed;

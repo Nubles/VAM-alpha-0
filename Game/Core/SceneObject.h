@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../Engine/Math/Transform.h"
+#include "GatherableNode.h"
 #include <string>
 
 namespace Game {
@@ -15,10 +16,15 @@ struct SceneObject {
     Engine::Transform transform;
     PrimitiveType type = PrimitiveType::Cube;
     Engine::Vec3 color = Engine::Vec3(1.0f);
+    
     // Interaction System properties
     bool isInteractable = false;
     float interactionRadius = 2.0f;
     std::string interactionMessage = "Interacted!";
+
+    // Resource Gathering properties
+    bool isGatherable = false;
+    GatherableNode gatherable;
 };
 
 } // namespace Game
