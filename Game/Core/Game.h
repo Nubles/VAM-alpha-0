@@ -4,6 +4,9 @@
 #include <vector>
 #include "SceneObject.h"
 #include "Player.h"
+#include "ItemDatabase.h"
+#include "Inventory.h"
+#include "Hotbar.h"
 
 // Forward declarations
 namespace Engine {
@@ -61,6 +64,10 @@ private:
     Player m_player;
     int m_targetObjectIndex;
     std::string m_lastInteractionLog;
+
+    // Inventory & Hotbar
+    Inventory m_inventory;
+    Hotbar m_hotbar;
 };
 
 } // namespace Game

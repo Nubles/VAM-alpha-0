@@ -34,6 +34,9 @@ bool Game::Init(Engine::Window* window) {
     m_window = window;
     m_running = true;
 
+    // Initialize Database
+    ItemDatabase::Get().Initialize();
+
     // Initialize Camera
     m_camera = std::make_unique<Engine::Camera>(glm::vec3(0.0f, 2.0f, 6.0f), glm::vec3(0.0f, 1.0f, 0.0f), -90.0f, -15.0f);
 
@@ -286,6 +289,38 @@ void Game::Update(float dt) {
     }
     eKeyWasPressed = eKeyPressed;
 
+    // Handle Debug Grants (F1 to F5)
+    static bool fKeysPressed[5] = {false};
+    int grantKeys[5] = {GLFW_KEY_F1, GLFW_KEY_F2, GLFW_KEY_F3, GLFW_KEY_F4, GLFW_KEY_F5};
+    std::string itemIds[5] = {"wood", "stone", "fiber", "raw_food", "primitive_tool"};
+    int grantCounts[5] = {10, 10, 15, 5, 1};
+
+    for (int i = 0; i < 5; ++i) {
+        bool down = Engine::Input::IsKeyPressed(grantKeys[i]);
+        if (down && !fKeysPressed[i]) {
+            int leftover = m_inventory.AddItem(itemIds[i], grantCounts[i]);
+            int granted = grantCounts[i] - leftover;
+            m_lastInteractionLog = "Debug Grant: " + std::to_string(granted) + "x " + itemIds[i];
+            if (leftover > 0) {
+                m_lastInteractionLog += " (Inventory Full, " + std::to_string(leftover) + " leftover)";
+            }
+            std::cout << "[Inventory] " << m_lastInteractionLog << std::endl;
+        }
+        fKeysPressed[i] = down;
+    }
+
+    // Hotbar selection keys (1 to 8)
+    int hotbarKeys[8] = {GLFW_KEY_1, GLFW_KEY_2, GLFW_KEY_3, GLFW_KEY_4, GLFW_KEY_5, GLFW_KEY_6, GLFW_KEY_7, GLFW_KEY_8};
+    for (int i = 0; i < 8; ++i) {
+        if (Engine::Input::IsKeyPressed(hotbarKeys[i])) {
+            m_hotbar.SelectSlot(i);
+        }
+    }
+
+    // Scroll wheel hotbar switching
+    float scrollY = Engine::Input::GetMouseDY(); // The delta y serves as cursor look, check input system scroll support
+    // Standard input might not map scroll, we stick to 1-8 keys and standard updates first.
+
     // Update cube rotation angle for general use
     m_cubeRotationAngle += m_cubeRotationSpeed * dt;
     if (m_cubeRotationAngle > 360.0f) {
@@ -391,6 +426,53 @@ void Game::RenderDebugUI(float dt) {
     ImGui::TextWrapped("Last Log: %s", m_lastInteractionLog.c_str());
     ImGui::End();
 
+    // Inventory & Hotbar HUD Window
+    ImGui::Begin("Player Inventory & Hotbar");
+    
+    // Render Hotbar Selection
+    ImGui::Text("Active Hotbar Slot (Keys 1-8):");
+    int activeIdx = m_hotbar.GetActiveIndex();
+    for (int i = 0; i < m_hotbar.GetSlotCount(); ++i) {
+        int invIdx = m_hotbar.GetInventoryIndex(i);
+        const auto& item = m_inventory.GetSlots()[invIdx];
+        
+        std::string label = "[" + std::to_string(i + 1) + "] ";
+        if (item.IsEmpty()) {
+            label += "Empty";
+        } else {
+            label += item.itemId + " (" + std::to_string(item.count) + ")";
+        }
+
+        if (i == activeIdx) {
+            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "%s <Selected>", label.c_str());
+        } else {
+            ImGui::Text("%s", label.c_str());
+        }
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Text("Full Inventory (24 Slots):");
+
+    // Print inventory slots as a list or simple grid
+    if (ImGui::BeginChild("InventorySlotsList", ImVec2(0, 150), true)) {
+        const auto& slots = m_inventory.GetSlots();
+        for (int i = 0; i < static_cast<int>(slots.size()); ++i) {
+            const auto& slot = slots[i];
+            std::string slotLabel = "Slot " + std::to_string(i) + ": ";
+            if (slot.IsEmpty()) {
+                slotLabel += "Empty";
+                ImGui::TextDisabled("%s", slotLabel.c_str());
+            } else {
+                slotLabel += slot.itemId + " (x" + std::to_string(slot.count) + ")";
+                ImGui::Text("%s", slotLabel.c_str());
+            }
+        }
+        ImGui::EndChild();
+    }
+
+    ImGui::End();
+
     ImGui::Begin("Realmbound Wilds Debug Console");
     
     ImGui::Text("Engine Performance");
@@ -471,7 +553,8 @@ void Game::RenderDebugUI(float dt) {
     ImGui::Spacing();
     ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Left-click: Capture Mouse");
     ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Left-Alt: Release Mouse");
-    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "W,A,S,D: Move | Left-Shift: Sprint | E: Interact | ESC: Quit");
+    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "W,A,S,D: Move | Left-Shift: Sprint | E: Interact");
+    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "F1-F5: Grant Items | 1-8: Select Hotbar Slot | ESC: Quit");
 
     ImGui::End();
 }
