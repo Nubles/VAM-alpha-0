@@ -37,6 +37,7 @@ bool Game::Init(Engine::Window* window) {
     // Initialize Database
     ItemDatabase::Get().Initialize();
     CraftingManager::Get().Initialize();
+    m_buildSystem.Initialize();
 
     // Initialize Camera
     m_camera = std::make_unique<Engine::Camera>(glm::vec3(0.0f, 2.0f, 6.0f), glm::vec3(0.0f, 1.0f, 0.0f), -90.0f, -15.0f);
@@ -395,6 +396,43 @@ void Game::Update(float dt) {
     float scrollY = Engine::Input::GetMouseDY(); // The delta y serves as cursor look, check input system scroll support
     // Standard input might not map scroll, we stick to 1-8 keys and standard updates first.
 
+    // Toggle Build Mode (Key B)
+    static bool bKeyWasPressed = false;
+    bool bKeyPressed = Engine::Input::IsKeyPressed(GLFW_KEY_B);
+    if (bKeyPressed && !bKeyWasPressed) {
+        m_buildSystem.ToggleBuildMode();
+        m_lastInteractionLog = m_buildSystem.IsBuildMode() ? "Entered Build Mode" : "Exited Build Mode";
+        std::cout << "[Build Mode] " << m_lastInteractionLog << std::endl;
+    }
+    bKeyWasPressed = bKeyPressed;
+
+    // Handle Build Mode input options
+    if (m_buildSystem.IsBuildMode()) {
+        // Rotate Preview (Arrow keys Left / Right)
+        if (Engine::Input::IsKeyPressed(GLFW_KEY_LEFT)) {
+            m_buildSystem.RotatePreview(-90.0f * dt);
+        }
+        if (Engine::Input::IsKeyPressed(GLFW_KEY_RIGHT)) {
+            m_buildSystem.RotatePreview(90.0f * dt);
+        }
+
+        // Left Click to place piece (only if mouse not hovering UI)
+        static bool clickWasPressed = false;
+        bool clickPressed = Engine::Input::IsMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
+        if (clickPressed && !clickWasPressed && !ImGui::GetIO().WantCaptureMouse) {
+            glm::vec3 buildTarget = m_buildSystem.GetPlacementTarget(m_camera->GetPosition(), m_camera->GetFront());
+            std::string buildMsg;
+            if (m_buildSystem.PlacePiece(m_inventory, buildTarget, m_sceneObjects, buildMsg)) {
+                m_lastInteractionLog = buildMsg;
+                std::cout << "[Build System] " << buildMsg << std::endl;
+            } else {
+                m_lastInteractionLog = buildMsg;
+                std::cout << "[Build Error] " << buildMsg << std::endl;
+            }
+        }
+        clickWasPressed = clickPressed;
+    }
+
     // Update cube rotation angle for general use
     m_cubeRotationAngle += m_cubeRotationSpeed * dt;
     if (m_cubeRotationAngle > 360.0f) {
@@ -456,6 +494,45 @@ void Game::Render() {
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
     }
+    
+    // Render Build Placement preview (Ghost Mesh) if build mode is active
+    if (m_buildSystem.IsBuildMode()) {
+        glm::vec3 buildTarget = m_buildSystem.GetPlacementTarget(m_camera->GetPosition(), m_camera->GetFront());
+        const BuildingPiece* selectedPiece = m_buildSystem.GetSelectedPiece();
+        if (selectedPiece) {
+            // Configure temporary Transform for preview
+            Engine::Transform previewTransform;
+            previewTransform.position = Engine::Vec3(buildTarget.x, buildTarget.y, buildTarget.z);
+            previewTransform.rotation = Engine::Vec3(0.0f, m_buildSystem.GetRotationYaw(), 0.0f);
+
+            if (selectedPiece->type == PieceType::Floor) {
+                previewTransform.scale = Engine::Vec3(2.0f, 0.1f, 2.0f);
+                previewTransform.position.y = 0.05f;
+            } else if (selectedPiece->type == PieceType::Wall) {
+                previewTransform.scale = Engine::Vec3(2.0f, 1.5f, 0.15f);
+                previewTransform.position.y = 0.75f;
+            } else if (selectedPiece->type == PieceType::Roof) {
+                previewTransform.scale = Engine::Vec3(2.0f, 0.15f, 2.0f);
+                previewTransform.position.y = 1.5f;
+            }
+
+            glm::mat4 model = previewTransform.GetModelMatrix();
+            m_cubeShader->SetMat4("model", model);
+            
+            // Set unlit ghost preview colors (semi-transparent blue/white)
+            m_cubeShader->SetVec3("objectColor", glm::vec3(0.2f, 0.6f, 1.0f));
+            m_cubeShader->SetBool("unlit", true);
+
+            // Render as a wireframe box
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+            glBindVertexArray(m_cubeVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+            
+            // Reset polygon mode for normal rendering
+            glPolygonMode(GL_FRONT_AND_BACK, m_wireframeMode ? GL_LINE : GL_FILL);
+        }
+    }
+    
     glBindVertexArray(0);
 
     m_cubeShader->Unuse();
@@ -592,6 +669,51 @@ void Game::RenderDebugUI(float dt) {
         ImGui::Separator();
     }
 
+    ImGui::End();
+
+    // Building System HUD Window
+    ImGui::Begin("Building System");
+    bool isBuildMode = m_buildSystem.IsBuildMode();
+    if (ImGui::Checkbox("Active Build Mode [B]", &isBuildMode)) {
+        m_buildSystem.SetBuildMode(isBuildMode);
+    }
+    ImGui::Separator();
+
+    if (m_buildSystem.IsBuildMode()) {
+        ImGui::Text("Selected Structure Piece:");
+        PieceType selectedType = m_buildSystem.GetSelectedPieceType();
+        
+        const char* pieceNames[] = {"Wood Floor", "Wood Wall", "Fiber Roof"};
+        PieceType types[] = {PieceType::Floor, PieceType::Wall, PieceType::Roof};
+
+        for (int i = 0; i < 3; ++i) {
+            if (ImGui::RadioButton(pieceNames[i], selectedType == types[i])) {
+                m_buildSystem.SetSelectedPieceType(types[i]);
+            }
+        }
+
+        ImGui::Spacing();
+        const BuildingPiece* piece = m_buildSystem.GetSelectedPiece();
+        if (piece) {
+            ImGui::Text("Materials Cost:");
+            if (piece->woodCost > 0) {
+                bool owned = m_inventory.Contains("wood", piece->woodCost);
+                ImGui::TextColored(owned ? ImVec4(0.3f, 1.0f, 0.3f, 1.0f) : ImVec4(1.0f, 0.3f, 0.3f, 1.0f),
+                                   "- Wood: %d required", piece->woodCost);
+            }
+            if (piece->fiberCost > 0) {
+                bool owned = m_inventory.Contains("fiber", piece->fiberCost);
+                ImGui::TextColored(owned ? ImVec4(0.3f, 1.0f, 0.3f, 1.0f) : ImVec4(1.0f, 0.3f, 0.3f, 1.0f),
+                                   "- Fiber: %d required", piece->fiberCost);
+            }
+        }
+
+        ImGui::Spacing();
+        ImGui::Text("Rotation (Keys LEFT/RIGHT): %.1f deg", m_buildSystem.GetRotationYaw());
+        ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 1.0f), "Left Click in Sandbox to place structure");
+    } else {
+        ImGui::TextDisabled("Build Mode is inactive. Press [B] to toggle.");
+    }
     ImGui::End();
 
     ImGui::Begin("Realmbound Wilds Debug Console");

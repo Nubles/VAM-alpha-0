@@ -7,6 +7,8 @@
 #include "../Game/Core/GatherableNode.h"
 #include "../Game/Core/Recipe.h"
 #include "../Game/Core/CraftingManager.h"
+#include "../Game/Core/BuildingPiece.h"
+#include "../Game/Core/BuildSystem.h"
 #include <iostream>
 #include <cassert>
 
@@ -259,6 +261,50 @@ void TestCraftingSystem() {
     std::cout << "TestCraftingSystem passed!" << std::endl;
 }
 
+void TestBuildingPlacement() {
+    Game::BuildSystem bs;
+    bs.Initialize();
+
+    // 1. Selection & Mode tracking
+    assert(!bs.IsBuildMode());
+    bs.ToggleBuildMode();
+    assert(bs.IsBuildMode());
+
+    assert(bs.GetSelectedPieceType() == Game::PieceType::Floor);
+    bs.SetSelectedPieceType(Game::PieceType::Wall);
+    assert(bs.GetSelectedPieceType() == Game::PieceType::Wall);
+
+    // 2. Rotation checks
+    assert(bs.GetRotationYaw() == 0.0f);
+    bs.RotatePreview(45.0f);
+    assert(bs.GetRotationYaw() == 45.0f);
+    bs.RotatePreview(320.0f);
+    assert(bs.GetRotationYaw() == 5.0f); // 365 - 360 = 5
+
+    // 3. Cost checking validation fails when resources missing
+    Game::Inventory inv(5);
+    std::vector<Game::SceneObject> worldObjects;
+    std::string msg;
+
+    // Floor costs 4 wood
+    bs.SetSelectedPieceType(Game::PieceType::Floor);
+    bool success = bs.PlacePiece(inv, glm::vec3(0, 0, 0), worldObjects, msg);
+    assert(!success);
+    assert(worldObjects.empty());
+
+    // 4. Successful placement consumes items and registers world mesh
+    inv.AddItem("wood", 10);
+    success = bs.PlacePiece(inv, glm::vec3(1, 2, 3), worldObjects, msg);
+    assert(success);
+    assert(inv.Contains("wood", 6));
+    assert(worldObjects.size() == 1);
+    assert(worldObjects[0].name == "Placed Wood Floor");
+    assert(worldObjects[0].transform.position.x == 1.0f);
+    assert(worldObjects[0].transform.position.z == 3.0f);
+
+    std::cout << "TestBuildingPlacement passed!" << std::endl;
+}
+
 int main() {
     std::cout << "Running EngineCoreTests..." << std::endl;
     TestTransformIdentity();
@@ -267,6 +313,7 @@ int main() {
     TestInventoryAndHotbar();
     TestResourceGathering();
     TestCraftingSystem();
+    TestBuildingPlacement();
     std::cout << "All tests passed!" << std::endl;
     return 0;
 }

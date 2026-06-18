@@ -127,6 +127,9 @@ set(SOURCE_FILES
     Game/Core/Recipe.h
     Game/Core/CraftingManager.h
     Game/Core/CraftingManager.cpp
+    Game/Core/BuildingPiece.h
+    Game/Core/BuildSystem.h
+    Game/Core/BuildSystem.cpp
     Game/Core/Main.cpp
 )
 
@@ -171,6 +174,8 @@ add_executable(EngineCoreTests
     Game/Core/GatherableNode.h Game/Core/GatherableNode.cpp
     Game/Core/Recipe.h
     Game/Core/CraftingManager.h Game/Core/CraftingManager.cpp
+    Game/Core/BuildingPiece.h
+    Game/Core/BuildSystem.h Game/Core/BuildSystem.cpp
 )
 target_include_directories(EngineCoreTests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}

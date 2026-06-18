@@ -8,6 +8,8 @@
 #include "Inventory.h"
 #include "Hotbar.h"
 #include "CraftingManager.h"
+#include "BuildingPiece.h"
+#include "BuildSystem.h"
 
 // Forward declarations
 namespace Engine {
@@ -69,6 +71,9 @@ private:
     // Inventory & Hotbar
     Inventory m_inventory;
     Hotbar m_hotbar;
+
+    // Building System
+    BuildSystem m_buildSystem;
 };
 
 } // namespace Game
