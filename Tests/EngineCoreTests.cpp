@@ -5,6 +5,8 @@
 #include "../Game/Core/Hotbar.h"
 #include "../Game/Core/DropTable.h"
 #include "../Game/Core/GatherableNode.h"
+#include "../Game/Core/Recipe.h"
+#include "../Game/Core/CraftingManager.h"
 #include <iostream>
 #include <cassert>
 
@@ -200,6 +202,63 @@ void TestResourceGathering() {
     std::cout << "TestResourceGathering passed!" << std::endl;
 }
 
+void TestCraftingSystem() {
+    Game::ItemDatabase::Get().Initialize();
+    Game::CraftingManager::Get().Initialize();
+
+    // 1. Recipe verification
+    const Game::Recipe* toolRecipe = Game::CraftingManager::Get().GetRecipe("recipe_primitive_tool");
+    assert(toolRecipe != nullptr);
+    assert(toolRecipe->displayName == "Primitive Tool");
+    assert(toolRecipe->ingredients[0].itemId == "wood");
+    assert(toolRecipe->ingredients[0].quantity == 5);
+
+    // 2. CanCraft checks
+    Game::Inventory inv(5);
+    // Add partial ingredients
+    inv.AddItem("wood", 4);
+    inv.AddItem("stone", 3);
+    inv.AddItem("fiber", 2);
+
+    // Should fail (missing 1 wood)
+    assert(!Game::CraftingManager::Get().CanCraft("recipe_primitive_tool", inv));
+
+    // Add remaining wood
+    inv.AddItem("wood", 1);
+    // Should succeed
+    assert(Game::CraftingManager::Get().CanCraft("recipe_primitive_tool", inv));
+
+    // 3. Execution of Craft
+    std::string msg;
+    bool success = Game::CraftingManager::Get().Craft("recipe_primitive_tool", inv, msg);
+    assert(success);
+    
+    // Verify ingredients consumed: wood (5-5=0), stone (3-3=0), fiber (2-2=0)
+    assert(!inv.Contains("wood", 1));
+    assert(!inv.Contains("stone", 1));
+    assert(!inv.Contains("fiber", 1));
+    
+    // Verify output tool added to inventory
+    assert(inv.Contains("primitive_tool", 1));
+
+    // 4. Inventory full crafting check
+    Game::Inventory fullInv(1);
+    fullInv.AddItem("wood", 50); // Single slot filled completely with wood
+
+    // Setup inventory with materials but no space for output tool
+    Game::Inventory noSpaceInv(3);
+    noSpaceInv.AddItem("wood", 5);
+    noSpaceInv.AddItem("stone", 3);
+    noSpaceInv.AddItem("fiber", 2);
+    // Fill the remaining slots completely with fiber
+    noSpaceInv.AddItem("fiber", 98); // consumes 2 fiber, slot 2 has 96 fiber. Inventory has no empty slots left.
+    // Tool requires 1 slot. So crafting should fail.
+    success = Game::CraftingManager::Get().Craft("recipe_primitive_tool", noSpaceInv, msg);
+    assert(!success);
+
+    std::cout << "TestCraftingSystem passed!" << std::endl;
+}
+
 int main() {
     std::cout << "Running EngineCoreTests..." << std::endl;
     TestTransformIdentity();
@@ -207,6 +266,7 @@ int main() {
     TestPlayerStamina();
     TestInventoryAndHotbar();
     TestResourceGathering();
+    TestCraftingSystem();
     std::cout << "All tests passed!" << std::endl;
     return 0;
 }

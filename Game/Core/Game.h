@@ -7,6 +7,7 @@
 #include "ItemDatabase.h"
 #include "Inventory.h"
 #include "Hotbar.h"
+#include "CraftingManager.h"
 
 // Forward declarations
 namespace Engine {

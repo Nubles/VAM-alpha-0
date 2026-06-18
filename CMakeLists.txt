@@ -124,6 +124,9 @@ set(SOURCE_FILES
     Game/Core/DropTable.h
     Game/Core/GatherableNode.h
     Game/Core/GatherableNode.cpp
+    Game/Core/Recipe.h
+    Game/Core/CraftingManager.h
+    Game/Core/CraftingManager.cpp
     Game/Core/Main.cpp
 )
 
@@ -166,6 +169,8 @@ add_executable(EngineCoreTests
     Game/Core/Hotbar.h Game/Core/Hotbar.cpp
     Game/Core/DropTable.h
     Game/Core/GatherableNode.h Game/Core/GatherableNode.cpp
+    Game/Core/Recipe.h
+    Game/Core/CraftingManager.h Game/Core/CraftingManager.cpp
 )
 target_include_directories(EngineCoreTests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}

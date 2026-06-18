@@ -36,6 +36,7 @@ bool Game::Init(Engine::Window* window) {
 
     // Initialize Database
     ItemDatabase::Get().Initialize();
+    CraftingManager::Get().Initialize();
 
     // Initialize Camera
     m_camera = std::make_unique<Engine::Camera>(glm::vec3(0.0f, 2.0f, 6.0f), glm::vec3(0.0f, 1.0f, 0.0f), -90.0f, -15.0f);
@@ -542,6 +543,53 @@ void Game::RenderDebugUI(float dt) {
             }
         }
         ImGui::EndChild();
+    }
+
+    ImGui::End();
+
+    // Workbench & Crafting HUD Window
+    ImGui::Begin("Workbench & Crafting");
+    ImGui::Text("Recipes Catalog:");
+    ImGui::Separator();
+
+    const auto& recipes = CraftingManager::Get().GetRecipes();
+    for (const auto& recipe : recipes) {
+        ImGui::Text("%s -> Output: %dx %s", recipe.displayName.c_str(), recipe.outputQuantity, recipe.outputItemId.c_str());
+        
+        // Render ingredients requirements
+        ImGui::Indent(10.0f);
+        bool canCraft = true;
+        for (const auto& ing : recipe.ingredients) {
+            bool owned = m_inventory.Contains(ing.itemId, ing.quantity);
+            if (!owned) {
+                canCraft = false;
+                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "- Requires %dx %s (Missing)", ing.quantity, ing.itemId.c_str());
+            } else {
+                ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "- Requires %dx %s (Owned)", ing.quantity, ing.itemId.c_str());
+            }
+        }
+        ImGui::Unindent(10.0f);
+
+        // Action craft button
+        std::string btnLabel = "Craft " + recipe.displayName;
+        if (!canCraft) {
+            ImGui::BeginDisabled();
+        }
+        if (ImGui::Button(btnLabel.c_str())) {
+            std::string craftResult;
+            if (CraftingManager::Get().Craft(recipe.id, m_inventory, craftResult)) {
+                m_lastInteractionLog = craftResult;
+                std::cout << "[Crafting] " << craftResult << std::endl;
+            } else {
+                m_lastInteractionLog = craftResult;
+                std::cout << "[Crafting Error] " << craftResult << std::endl;
+            }
+        }
+        if (!canCraft) {
+            ImGui::EndDisabled();
+        }
+        ImGui::Spacing();
+        ImGui::Separator();
     }
 
     ImGui::End();
