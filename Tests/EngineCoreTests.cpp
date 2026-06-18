@@ -305,6 +305,59 @@ void TestBuildingPlacement() {
     std::cout << "TestBuildingPlacement passed!" << std::endl;
 }
 
+void TestCombatEnemyAI() {
+    Game::ItemDatabase::Get().Initialize();
+
+    // 1. Enemy initialization
+    Game::Enemy sentinel("Ironbound Sentinel", Engine::Vec3(0.0f, 0.0f, 0.0f));
+    assert(sentinel.GetName() == "Ironbound Sentinel");
+    assert(sentinel.GetHealth() == 100.0f);
+    assert(!sentinel.IsDead());
+    assert(sentinel.GetState() == Game::EnemyState::Patrol);
+
+    // 2. Proximity Chase check
+    float playerHealth = 100.0f;
+    std::string logMsg;
+    
+    // Player is 10 units away (stays Patrol)
+    sentinel.Update(0.1f, Engine::Vec3(10.0f, 0.0f, 0.0f), playerHealth, logMsg);
+    assert(sentinel.GetState() == Game::EnemyState::Patrol);
+
+    // Player enters chase range (5.0 units)
+    sentinel.Update(0.1f, Engine::Vec3(5.0f, 0.0f, 0.0f), playerHealth, logMsg);
+    assert(sentinel.GetState() == Game::EnemyState::Chase);
+
+    // 3. Combat attack rates
+    // Player enters attack range (1.0 unit)
+    sentinel.Update(0.1f, Engine::Vec3(1.0f, 0.0f, 0.0f), playerHealth, logMsg);
+    assert(sentinel.GetState() == Game::EnemyState::Attack);
+    assert(playerHealth == 90.0f); // Took 10 damage
+
+    // Instant update again (should be on cooldown, health remains 90)
+    sentinel.Update(0.1f, Engine::Vec3(1.0f, 0.0f, 0.0f), playerHealth, logMsg);
+    assert(playerHealth == 90.0f);
+
+    // 4. Damage take and death drops
+    std::string hitMsg;
+    bool killed = sentinel.TakeDamage(80.0f, hitMsg);
+    assert(!killed);
+    assert(sentinel.GetHealth() == 20.0f);
+
+    killed = sentinel.TakeDamage(20.0f, hitMsg);
+    assert(killed);
+    assert(sentinel.IsDead());
+    assert(sentinel.GetState() == Game::EnemyState::Dead);
+
+    // Verify loot drop adding Stone and Food
+    Game::Inventory playerInv(5);
+    std::string lootMsg;
+    sentinel.DropLoot(playerInv, lootMsg);
+    assert(playerInv.Contains("stone", 3));
+    assert(playerInv.Contains("raw_food", 1));
+
+    std::cout << "TestCombatEnemyAI passed!" << std::endl;
+}
+
 int main() {
     std::cout << "Running EngineCoreTests..." << std::endl;
     TestTransformIdentity();
@@ -314,6 +367,7 @@ int main() {
     TestResourceGathering();
     TestCraftingSystem();
     TestBuildingPlacement();
+    TestCombatEnemyAI();
     std::cout << "All tests passed!" << std::endl;
     return 0;
 }

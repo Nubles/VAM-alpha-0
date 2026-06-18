@@ -2,6 +2,7 @@
 
 #include "../../Engine/Math/Transform.h"
 #include "GatherableNode.h"
+#include "Enemy.h"
 #include <string>
 
 namespace Game {
@@ -25,6 +26,10 @@ struct SceneObject {
     // Resource Gathering properties
     bool isGatherable = false;
     GatherableNode gatherable;
+
+    // Combat & AI properties
+    bool isEnemy = false;
+    Enemy enemy;
 };
 
 } // namespace Game

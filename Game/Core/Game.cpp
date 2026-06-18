@@ -171,6 +171,20 @@ bool Game::Init(Engine::Window* window) {
     crackedRock.gatherable = GatherableNode("Cracked Rock", stoneTable, 4, "primitive_tool");
     m_sceneObjects.push_back(crackedRock);
 
+    // 5. Ironbound Sentinel Enemy
+    SceneObject sentinel;
+    sentinel.name = "Ironbound Sentinel";
+    sentinel.type = PrimitiveType::Cube;
+    sentinel.color = Engine::Vec3(0.9f, 0.2f, 0.2f); // Red
+    sentinel.transform.position = Engine::Vec3(-5.0f, 0.5f, -5.0f);
+    sentinel.transform.rotation = Engine::Vec3(0.0f, 0.0f, 0.0f);
+    sentinel.transform.scale = Engine::Vec3(1.0f, 1.0f, 1.0f);
+    sentinel.isInteractable = true;
+    sentinel.interactionRadius = 1.5f;
+    sentinel.isEnemy = true;
+    sentinel.enemy = Enemy("Ironbound Sentinel", Engine::Vec3(-5.0f, 0.5f, -5.0f));
+    m_sceneObjects.push_back(sentinel);
+
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -433,6 +447,30 @@ void Game::Update(float dt) {
         clickWasPressed = clickPressed;
     }
 
+    // Apply Combat hits (Left Click in Sandbox) when NOT in build mode
+    if (!m_buildSystem.IsBuildMode()) {
+        static bool combatClickWasPressed = false;
+        bool combatClickPressed = Engine::Input::IsMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
+        if (combatClickPressed && !combatClickWasPressed && !ImGui::GetIO().WantCaptureMouse) {
+            if (m_targetObjectIndex != -1) {
+                auto& targetObj = m_sceneObjects[m_targetObjectIndex];
+                if (targetObj.isEnemy && !targetObj.enemy.IsDead()) {
+                    std::string hitMsg;
+                    bool killed = targetObj.enemy.TakeDamage(20.0f, hitMsg);
+                    m_lastInteractionLog = hitMsg;
+                    std::cout << "[Combat] " << hitMsg << std::endl;
+                    if (killed) {
+                        std::string lootMsg;
+                        targetObj.enemy.DropLoot(m_inventory, lootMsg);
+                        m_lastInteractionLog += " | " + lootMsg;
+                        std::cout << "[Combat] " << lootMsg << std::endl;
+                    }
+                }
+            }
+        }
+        combatClickWasPressed = combatClickPressed;
+    }
+
     // Update cube rotation angle for general use
     m_cubeRotationAngle += m_cubeRotationSpeed * dt;
     if (m_cubeRotationAngle > 360.0f) {
@@ -448,6 +486,19 @@ void Game::Update(float dt) {
             obj.transform.rotation.y += m_cubeRotationSpeed * dt;
             // Float up and down using a sine wave based on runtime
             obj.transform.position.y = 2.5f + static_cast<float>(sin(glfwGetTime())) * 0.7f;
+        } else if (obj.isEnemy && !obj.enemy.IsDead()) {
+            // Run AI loop
+            float playerHealth = m_player.GetHealth();
+            std::string aiLog;
+            obj.enemy.Update(dt, m_player.GetPosition(), playerHealth, aiLog);
+            m_player.SetHealth(playerHealth);
+            if (!aiLog.empty()) {
+                m_lastInteractionLog = aiLog;
+                std::cout << "[AI] " << aiLog << std::endl;
+            }
+            // Update SceneObject transform coordinates to follow the Enemy position
+            Engine::Vec3 enemyPos = obj.enemy.GetPosition();
+            obj.transform.position = enemyPos;
         }
     }
 }
@@ -480,6 +531,8 @@ void Game::Render() {
 
     // Render all scene objects
     for (const auto& obj : m_sceneObjects) {
+        if (obj.isEnemy && obj.enemy.IsDead()) continue;
+
         glm::mat4 model = obj.transform.GetModelMatrix();
         m_cubeShader->SetMat4("model", model);
         m_cubeShader->SetVec3("objectColor", obj.color);
